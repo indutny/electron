@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Fedor Indutny <indutny@signal.org>
+Date: Sat, 1 May 2021 14:08:48 -0700
+Subject: node-api: poll immediately in threadsafe_function
+
+Electron has to interrupt browser's main thread to invoke `uv_async_t`'s
+callback on it. These interrupts make `uv_run()` calls interleaved with
+the main process activity and `uv_run()` becomes significantly delayed.
+
+Start `uv_idle_t` after processing queued call in
+`napi_threadsafe_function` to poll for another queued poll immediately
+instead of waiting for a whole event loop turn (both browser's and uv's
+loop). This handles situations where:
+
+1. threadsafe function call is queued during current invocation
+2. the call is queued during processing of microtask queue
+
+diff --git a/src/node_api.cc b/src/node_api.cc
+index f1a5265b6a7234dc754aedc86ecd3132f3d90b09..1a3a5ffc698324c8bec0e6b6f4e7df7c4a24e035 100644
+--- a/src/node_api.cc
++++ b/src/node_api.cc
+@@ -316,6 +316,11 @@ class ThreadSafeFunction : public node::AsyncResource {
+         call_js_cb(env, js_callback, context, data);
+       });
+     }
++
++    if (popped_value) {
++      node::Mutex::ScopedLock lock(this->mutex);
++      CHECK_EQ(0, uv_idle_start(&idle, IdleCb));
++    }
+   }
+ 
+   void Finalize() {

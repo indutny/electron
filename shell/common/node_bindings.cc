@@ -575,17 +575,20 @@ void NodeBindings::UvRunOnce() {
   // Enter node context while dealing with uv events.
   v8::Context::Scope context_scope(env->context());
 
-  // Perform microtask checkpoint after running JavaScript.
-  gin_helper::MicrotasksScope microtasks_scope(env->isolate());
-
-  if (browser_env_ != BrowserEnvironment::kBrowser)
-    TRACE_EVENT_BEGIN0("devtools.timeline", "FunctionCall");
-
   // Deal with uv events.
-  int r = uv_run(uv_loop_, UV_RUN_NOWAIT);
+  int r = 0;
+  do {
+    // Perform microtask checkpoint after running JavaScript.
+    gin_helper::MicrotasksScope microtasks_scope(env->isolate());
 
-  if (browser_env_ != BrowserEnvironment::kBrowser)
-    TRACE_EVENT_END0("devtools.timeline", "FunctionCall");
+    if (browser_env_ != BrowserEnvironment::kBrowser)
+      TRACE_EVENT_BEGIN0("devtools.timeline", "FunctionCall");
+
+    r = uv_run(uv_loop_, UV_RUN_NOWAIT);
+
+    if (browser_env_ != BrowserEnvironment::kBrowser)
+      TRACE_EVENT_END0("devtools.timeline", "FunctionCall");
+  } while (r != 0 && uv_backend_timeout(uv_loop_) == 0);
 
   if (r == 0)
     base::RunLoop().QuitWhenIdle();  // Quit from uv.
