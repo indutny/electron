@@ -16,18 +16,15 @@ loop). This handles situations where:
 2. the call is queued during processing of microtask queue
 
 diff --git a/src/node_api.cc b/src/node_api.cc
-index f1a5265b6a7234dc754aedc86ecd3132f3d90b09..1a3a5ffc698324c8bec0e6b6f4e7df7c4a24e035 100644
+index f1a5265b6a7234dc754aedc86ecd3132f3d90b09..3ff458530871b25e6850ddfe4fb1ddfe28cd7f14 100644
 --- a/src/node_api.cc
 +++ b/src/node_api.cc
-@@ -316,6 +316,11 @@ class ThreadSafeFunction : public node::AsyncResource {
-         call_js_cb(env, js_callback, context, data);
-       });
-     }
-+
-+    if (popped_value) {
-+      node::Mutex::ScopedLock lock(this->mutex);
-+      CHECK_EQ(0, uv_idle_start(&idle, IdleCb));
-+    }
-   }
- 
-   void Finalize() {
+@@ -296,7 +296,7 @@ class ThreadSafeFunction : public node::AsyncResource {
+               cond->Signal(lock);
+             }
+             CloseHandlesAndMaybeDelete();
+-          } else {
++          } else if (!popped_value) {
+             CHECK_EQ(0, uv_idle_stop(&idle));
+           }
+         }
