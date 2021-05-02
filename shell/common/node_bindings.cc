@@ -588,6 +588,13 @@ void NodeBindings::UvRunOnce() {
 
     if (browser_env_ != BrowserEnvironment::kBrowser)
       TRACE_EVENT_END0("devtools.timeline", "FunctionCall");
+
+    // Make sure that `setImmediate` yields to browser to avoid starvation
+    auto* immediate_idle_handle =
+        reinterpret_cast<uv_handle_t*>(env->immediate_idle_handle());
+    if (uv_is_active(immediate_idle_handle)) {
+      break;
+    }
   } while (r != 0 && uv_backend_timeout(uv_loop_) == 0);
 
   if (r == 0)
